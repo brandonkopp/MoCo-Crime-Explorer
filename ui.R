@@ -116,6 +116,7 @@ tabPanel("Documentation",
                   h2("Find Out More."),
                   tags$ul(
                     tags$li("See the full code for this application on ", tags$a(href="https://github.com/brandonkopp/MoCo-Crime-Explorer", "Github")),
+                    tags$li("See my summary of this application on ", tags$a(href="http://brandonkopp.github.io/MoCoCrimePresentation/#/", "Github.io")),
                     tags$li("Check out my writeups on other R data analyses at ", tags$a(href='http://rpubs.com/brandonkopp', "RPubs")),
                     tags$li("See all of the other places I exist on the Internets at my website, ", tags$a(href="http://www.brandonkopp.com", "brandonkopp.com"))
                   ),
