@@ -11,6 +11,7 @@ library(KernSmooth)
 library(raster)
 library(sp)
 library(rgdal)
+library(rgeos)
 
 #Create object for "Crime" dropdown menu
 labels <- c("All Crime","Homicide","Rape","Robbery","Aggravated Assault","Burglary","Larceny","Auto Theft","Assault","Sex Offense","DUI")
@@ -35,7 +36,7 @@ shinyUI(navbarPage("MoCo Crime Explorer",id="nav",
                     style = "opacity: 0.80;padding: 10px; border-bottom: 1px solid #CCC; background: #e5f2ff;",
                     h3(textOutput("txt")),
                     radioButtons("maptype","Map Type:",
-                                 choices = list("Points" = 1, "Heatmap" = 2),selected = 1),
+                                 choices = list("Points" = 1, "Heatmap" = 2,"Grid" = 3),selected = 1),
                     dateRangeInput("date", "Date Range:",
                                    start  = Sys.Date()-30,
                                    end    = date(),
@@ -47,7 +48,8 @@ shinyUI(navbarPage("MoCo Crime Explorer",id="nav",
                     h4("Add Layers"),"Works Best With the Heatmap",
                     checkboxInput("school", "Schools"),
                     checkboxInput("hospital","Hospitals"),
-                    checkboxInput("liquor","Liquor Stores")
+                    checkboxInput("liquor","Liquor Stores"),
+                    checkboxInput("bar","Bar/Restaurant")
       ),
       #Right Graph Panel
       conditionalPanel(condition = "input.maptype == '1'",
@@ -65,13 +67,28 @@ shinyUI(navbarPage("MoCo Crime Explorer",id="nav",
                                 style = "opacity: 0.80;padding: 10px; border-bottom: 1px solid #CCC; background: #e7adb7;",
                                 h4("Adjust the Heatmap"),
                                 sliderInput("band","Bandwidth:",min=0.002,max=0.020,step = 0.002,value=0.004 ),
-                                sliderInput("thresh","Threshold:",min=10,max=60,step=10,value=30),
+                                sliderInput("thresh","Threshold:",min=5,max=50,step=5,value=30),
                                 tags$b("____________________________________"),
                                 h4("Style the Heatmap"),
                                 selectInput("color", label = "Color Scheme:",
                                             choices = c("RdBu","RdGy","RdYlGn","RdYlBu"), selected = "RdBu"),
                                sliderInput("opacity","Opacity:",min=.2,max=1,step=.1,value=.5)
                                )
+      ),
+      #Right Polygon Adjust Panel
+      conditionalPanel(condition = "input.maptype == '3'",
+                       absolutePanel(top = 19, right = 10, width=275, class = "panel panel-default", 
+                                     bottom = "auto", height="auto", fixed = FALSE, draggable = TRUE,
+                                     style = "opacity: 0.80;padding: 10px; border-bottom: 1px solid #CCC; background: #b8e186;",
+                                     h4("Adjust the Grid Map"),
+                                     sliderInput("box","Grid Size (in meters):",min=250,max=2000,step=250,value=1000),
+                                     sliderInput("threshold","Threshold:",min=0,max=20,step=2,value=0),
+                                     tags$b("____________________________________"),
+                                     h4("Style the Grid Map"),
+                                     selectInput("polcolor", label = "Color Scheme:",
+                                                 choices = c("RdBu","RdGy","RdYlGn","RdYlBu"), selected = "RdBu"),
+                                     sliderInput("polopacity","Opacity:",min=.2,max=1,step=.1,value=.5)
+                       )
       )
    ),
    #Bottom Left Citations
@@ -95,6 +112,7 @@ tabPanel("Documentation",
                   tags$ol(
                     tags$li(tags$b("Points Map - "), "Each report is plotted on a map by its latitude and longitude. Clicking on the points provides detail about the crime committed."),
                     tags$li(tags$b("Heatmap - "), "Kernel density estimation is used to summarize the co-occurrence of crime within a certain geographic area. The parameters and aesthetics of the heatmap can be tuned using on-screen controls."),
+                    tags$li(tags$b("Grid Map - "), "A color gradient shows how many crimes have been committed in a particular area. You can adjust the size of the areas using a slider."),
                     tags$li(tags$b("Plots - "), "Several charts are provided showing the distribution of crimes across time.")
                     ),
                   h2("How To Use This Application"),
@@ -102,6 +120,7 @@ tabPanel("Documentation",
                   tags$p("You can also select the ", tags$b("type of crime"), " using the dropdown box."),
                   tags$p("Once you have selected the subset of crimes you are intersted in, you can choose between the ", tags$b("points map"), " and ", tags$b("heatmap"), " using the radio buttons."),
                   tags$p("When you select 'Heatmap' as a map type, the plots on the right-hand side of the screen will be replaced by a new menu that allows you to ", tags$b("make adjustments to the heatmap.")),
+                  tags$p("When you select 'Grid' as a map type, another menu appears that allows you to ", tags$b("make adjustments to the grid map.")),
                   tags$p("If you would like to see crime in relation to community features like schools and hospitals or businesses like liquor stores, you can ", tags$b("add layers"), " by clicking one of the checkboxes."),
                   tags$img(src="layout.png", align = "center", width="950"),
                   h2("Understanding the Heatmap"),

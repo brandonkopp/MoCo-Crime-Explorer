@@ -7,6 +7,7 @@ shinyServer(function(input, output) {
   
   #Load Outline of Montgomery County
   moco <- readOGR(dsn="./poly", "poly")
+  moco@proj4string@projargs <- "+proj=longlat +ellps=WGS84 +towgs84=0,0,0,0,0,0,0 +no_defs"
   
   #Download and clean crime data
   crime <- reactive({
@@ -62,13 +63,42 @@ shinyServer(function(input, output) {
     return(crime)
   })
   
+  mocodat <- reactive({
+    # Create an empty raster.
+    grid <- raster(extent(moco))
+    # Choose its resolution. I will create boxes that are roughly 1000 sq m.
+    res(grid) <- input$box/1600/67
+    # Make the grid have the same coordinate reference system (CRS) as the shapefile.
+    proj4string(grid)<-proj4string(moco)
+    # Transform this raster into a polygon and create a grid without an overall shape.
+    gridpolygon <- rasterToPolygons(grid)
+    # Intersect the grid with Montgomery County.
+    moco.grid <- intersect(moco, gridpolygon)
+    #Create ID Number for Each Box In Grid
+    moco.grid@data$sector <- 1:nrow(moco.grid@data)
+    
+    #Add Data to Grid
+    new <- crime()
+    new <- new[!is.na(new$longitude), ]
+    xy <- new[ ,c("longitude","latitude")]
+    new <- SpatialPointsDataFrame(coords=xy, data = new)
+    new@proj4string@projargs <- "+proj=longlat +ellps=WGS84 +towgs84=0,0,0,0,0,0,0 +no_defs"
+    res <- over(new, moco.grid)
+    x <- as.data.frame(table(res$sector))
+    moco.grid@data <- moco.grid@data[ ,1:22]
+    moco.grid@data <- data.frame(moco.grid@data, x[match(moco.grid@data[,"sector"], x$Var1),])
+    
+    moco.grid@data$Freq[moco.grid@data$Freq < input$threshold] <- NA
+    return(moco.grid)
+  })
+  
   output$map <- renderLeaflet({
     #Heatmap (Kernel Density Estimate) Calculation
     x <- crime()[ ,c("longitude","latitude")]
     x <- x[complete.cases(x), ]
     est <- bkde2D(x, 
                   bandwidth=c(input$band, input$band),
-                  gridsize=c(1200, 1200))
+                  gridsize=c(1800, 1800))
     est$fhat[est$fhat < input$thresh] <- NA
 
     loc_density_raster <- raster(
@@ -116,8 +146,21 @@ shinyServer(function(input, output) {
         addProviderTiles("CartoDB.Positron") %>%
         setView(lng = mean(x[, "longitude"]) - .05, lat = mean(x[, "latitude"]) + .037, zoom = 11) %>%
         addPolygons(data = moco, weight = 2, color = "black", fillOpacity = 0) %>%
-        addRasterImage(x = loc_density_raster, colors=color_pal, opacity = input$opacity, project = FALSE) #%>%
-        #addLegend("bottomright",title=input$class, pal = color_pal, values = values(loc_density_raster))
+        addRasterImage(x = loc_density_raster, colors=color_pal, opacity = input$opacity, project = FALSE)
+    }else if(input$maptype == 3){
+      
+      pal <- colorNumeric(rev(brewer.pal(6, input$polcolor)), domain = mocodat()@data$Freq, na.color = "transparent")
+      
+      popup <- with(mocodat()@data,paste0("<h4><strong>Sector: ",sector,"</strong></h4>",
+                      "<strong>",input$class,": ",Freq,"</strong><br>"))
+      
+      leaf <- leaflet(mocodat()) %>%
+        addProviderTiles("CartoDB.Positron") %>%
+        setView(lng = mean(x[, "longitude"]) - .05, lat = mean(x[, "latitude"]) + .037, zoom = 11) %>%
+        addPolygons(data = moco, weight = 2, color = "black", fillOpacity = 0) %>%
+        addPolygons(data = mocodat(), weight = .3 ,color = "gray", popup=popup,
+                    fillColor = ~pal(mocodat()@data$Freq), fillOpacity = input$polopacity) %>%
+        addLegend("bottomright",title=paste0("Total ", input$class), pal = pal, values = mocodat()@data$Freq)
     }
     
 
@@ -195,9 +238,41 @@ shinyServer(function(input, output) {
                    icon = liquorIcon)
     }
     
-    leaf
-  })
+  if(input$bar == TRUE){
+    liquor <- reactive({
+      url <- "https://data.montgomerycountymd.gov/resource/6bdh-is2m.json?channel_type=On%20Premise"
+      #Retrieve data
+      liquor <- fromJSON(url)
+      liquor <- liquor[liquor$location$coordinates != "NULL", ]
+      
+      latlon <- data.frame(matrix(ncol=2,nrow=1))
+      names(latlon) <- c("longitude","latitude")
+      for(i in 1:nrow(liquor)){
+        lon <- as.numeric(liquor$location$coordinates[[i]][1])
+        lat <- as.numeric(liquor$location$coordinates[[i]][2])
+        temp <- data.frame(cbind(lon,lat))
+        names(temp) <- c("longitude","latitude")
+        latlon <- rbind(latlon,temp)
+      }
+      latlon <- latlon[2:nrow(latlon), ]
+      
+      liquor <- cbind(liquor, latlon)
+      return(liquor)
+    })
+    
+    popupliquor <-  with(liquor(),paste(sep = "",
+                                        "<b><h4>",licensee_name,"</h4></b>",
+                                        "<b>Address: </b> ",location_address,"<br/>"))
+    liquorIcon <- makeIcon(iconUrl= "http://www.girlfridayproductions.com/wordpress/wp-content/themes/girlfriday/assets/img/icons/icon-cocktail.png",
+                           iconWidth = 17, iconHeight = 17)
+    leaf <- leaf %>%
+      addMarkers(lng = liquor()$longitude, lat = liquor()$latitude, popup= popupliquor,
+                 icon = liquorIcon)
+  }
   
+  leaf
+})
+
   #Create plot for crimes by hour of the day
   output$hourofday <- renderPlot ({
     ggplot(data=as.data.frame(prop.table(table(crime()[, "hourofday"])))) +
