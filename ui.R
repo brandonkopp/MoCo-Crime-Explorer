@@ -14,7 +14,10 @@ library(rgdal)
 library(rgeos)
 
 #Create object for "Crime" dropdown menu
-labels <- c("All Crime","Homicide","Rape","Robbery","Aggravated Assault","Burglary","Larceny","Auto Theft","Assault","Sex Offense","DUI")
+labels <- c("All Crime","All Crime (except Petty & Financial)","Part 1 Violent (P1V)","Part 1 Property (P1P)",
+            "Financial Crimes (e.g., Forgery)","Petty Offenses","-------- Individual Crimes ---------",
+            "Homicide","Rape","Robbery","Aggravated Assault","Burglary","Larceny","Auto Theft",
+            "Assault","Arson","Sex Offense","DUI")
 
 #SHINY UI
 shinyUI(navbarPage("MoCo Crime Explorer",id="nav",
@@ -43,7 +46,7 @@ shinyUI(navbarPage("MoCo Crime Explorer",id="nav",
                                    min    = "2013-07-01",
                                    max    = date(),
                                    separator = " - "),
-                    selectInput("class", "Crime:", labels, selected = "All Crime"),
+                    selectInput("class", "Crime:", labels, selected = "All Crime (except Petty & Financial)"),
                     tags$b("____________________________________"),tags$br(),
                     h4("Add Layers"),"Works Best With the Heatmap",
                     checkboxInput("school", "Schools"),
@@ -81,7 +84,7 @@ shinyUI(navbarPage("MoCo Crime Explorer",id="nav",
                                      bottom = "auto", height="auto", fixed = FALSE, draggable = TRUE,
                                      style = "opacity: 0.80;padding: 10px; border-bottom: 1px solid #CCC; background: #b8e186;",
                                      h4("Adjust the Grid Map"),
-                                     sliderInput("box","Grid Size (in meters):",min=250,max=2000,step=250,value=1000),
+                                     sliderInput("box","Grid Size (in meters):",min=500,max=3500,step=500,value=1500),
                                      sliderInput("threshold","Threshold:",min=0,max=20,step=2,value=0),
                                      tags$b("____________________________________"),
                                      h4("Style the Grid Map"),

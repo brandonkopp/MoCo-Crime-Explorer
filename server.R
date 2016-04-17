@@ -1,8 +1,16 @@
 shinyServer(function(input, output) {
   
   #Create object to use for map legend
-  maplabels <- c("Homicide","Rape","Robbery","Aggravated Assault","Burglary","Larceny","Auto Theft","Assault","Sex Offense","DUI")
-  cl <- c("01","02","03","04","05","06","07","08","17","28")
+  maplabels <- c("Homicide","Rape","Robbery","Aggravated Assault","Burglary",
+                 "Larceny","Auto Theft","Assault","Arson","Forgery/Counterfeiting","Bad Checks",
+                 "Embezzlement","Stolen Property","Vandalism","Weapon Possession","Prostitution",
+                 "Sex Offense","Drug Crimes","Gambling","Family Offense","Liquor",
+                 "Disorderly Conduct","Misc. Crime","DUI")
+  cl <- c("01","02","03","04","05",
+          "06","07","08","09","10","11",
+          "12","13","14","15","16",
+          "17","18","19","20","22",
+          "24","27","28")
   labeldf <- data.frame(maplabels, cl)
   
   #Load Outline of Montgomery County
@@ -13,7 +21,13 @@ shinyServer(function(input, output) {
   crime <- reactive({
     #Translate text entries in the dropdown menu to strings that can be used to filter dataset
     dataIn <- switch(input$class,
-                     "All Crime" = c("01","02","03","04","05","06","07","08","17","28"),
+                     "All Crime" = c("01","02","03","04","05","06","07","08","09","10","11","12","13","14",
+                                     "15","16","17","18","19","20","22","24","27","28"),
+                     "All Crime (except Petty & Financial)" = c("01","02","03","04","05","06","07","08","09","17","28"),
+                     "Part 1 Violent (P1V)" = c("01","02","03","04"),
+                     "Part 1 Property (P1P)" = c("05","06","07","03"),
+                     "Financial Crimes (e.g., Forgery)" = c("10","11","12"),
+                     "Petty Offenses" = c("13","14","15","16","18","19","20","22","24","27"),
                      "Homicide" = "01",
                      "Rape" = "02",
                      "Robbery" = "03",
@@ -21,6 +35,7 @@ shinyServer(function(input, output) {
                      "Burglary" = "05",
                      "Larceny" = "06",
                      "Auto Theft" = "07",
+                     "Arson" = "09",
                      "Assault" = "08",
                      "Sex Offense" = "17",
                      "DUI" = "28") 
@@ -118,7 +133,7 @@ shinyServer(function(input, output) {
                                  "<b>Place: </b> ",place,"<br/>"))
     
     #Set up color scheme for crime points
-    col <- colorFactor(brewer.pal(nrow(legdf), "Paired"), domain= legdf$unique.crime......cl...)
+    col <- colorFactor(rev(brewer.pal(nrow(legdf), "Paired")), domain= legdf$unique.crime......cl...)
     
     #Set up color scheme for heatmap
     color_pal <- colorNumeric(
@@ -135,9 +150,11 @@ shinyServer(function(input, output) {
             addCircles(lng = crime()$longitude, lat = crime()$latitude, popup= popup, 
                        weight = 8, radius=8, color= col(crime()$cl), stroke = TRUE, fillOpacity = .6)
           
-          if(input$class =="All Crime") {
+          if(input$class %in% c("All Crime (except Petty & Financial)","Part 1 Violent (P1V)",
+                                "Part 1 Property (P1P)","Financial Crimes (e.g., Forgery)",
+                                "Petty Offenses")) {
             leaf <- leaf %>%
-              addLegend("bottomright", colors= brewer.pal(nrow(legdf), "Paired"), 
+              addLegend("bottomright", colors= rev(brewer.pal(nrow(legdf), "Paired")), 
                         labels= legdf$unique.crime......maplabels...,opacity = 0.5)
           }    
           
@@ -313,11 +330,13 @@ shinyServer(function(input, output) {
       scale_x_discrete(limits=c('Sun','Mon','Tue','Wed','Thu','Fri','Sat')) +
       scale_y_continuous(expand = c(0,0), labels = percent) +
       labs(
-        title = paste0("Percentage of ", input$class,"s by..."),
+        title = paste0("Percentage of ", input$class," by..."),
         x = "Day of Week",
         y = "Percent"
       ) +
-      theme(plot.title = element_text(size = 18, face="bold", color = "black"),
+      theme(plot.title = element_text(size = ifelse(nchar(input$class)>25,12,
+                                                    ifelse(nchar(input$class)>17,14,18)),
+                                      face="bold", color = "black"),
             plot.background = element_blank(),
             panel.border = element_blank(),
             panel.background = element_blank(),
