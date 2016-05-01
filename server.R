@@ -66,6 +66,7 @@ shinyServer(function(input, output) {
     
     #Convert start_date to variable format recognizable by R
     crime$start_date <- as.POSIXct(crime$start_date, "%Y-%m-%dT%H:%M:%S", tz="EST")
+    crime$newdate <- as.Date(format(crime$start_date, "%Y-%m-%d"))
     
     #Create variables for use in charts
     crime$dayofweek <- format(crime$start_date, "%a")    #By Weekday
@@ -73,6 +74,20 @@ shinyServer(function(input, output) {
     
     #Create global variable showing the number of rows (i.e., recorded crimes) in the dataset for reactive text
     numrow <<- nrow(crime)
+    
+    #Add Grid Info
+    grid <- raster(extent(moco))
+    res(grid) <- input$box/1600/67
+    proj4string(grid)<-proj4string(moco)
+    gridpolygon <- rasterToPolygons(grid)
+    moco.grid <- intersect(moco, gridpolygon)
+    moco.grid@data$sector <- 1:nrow(moco.grid@data)
+    new <- crime
+    xy <- new[ ,c("longitude","latitude")]
+    new <- SpatialPointsDataFrame(coords=xy, data = new)
+    new@proj4string@projargs <- "+proj=longlat +ellps=WGS84 +towgs84=0,0,0,0,0,0,0 +no_defs"
+    res <- over(new, moco.grid)
+    crime$sector <- res$sector
     
     #Return downloaded and cleaned dataset to variable crime() for use in other functions
     return(crime)
@@ -91,15 +106,8 @@ shinyServer(function(input, output) {
     moco.grid <- intersect(moco, gridpolygon)
     #Create ID Number for Each Box In Grid
     moco.grid@data$sector <- 1:nrow(moco.grid@data)
-    
-    #Add Data to Grid
-    new <- crime()
-    new <- new[!is.na(new$longitude), ]
-    xy <- new[ ,c("longitude","latitude")]
-    new <- SpatialPointsDataFrame(coords=xy, data = new)
-    new@proj4string@projargs <- "+proj=longlat +ellps=WGS84 +towgs84=0,0,0,0,0,0,0 +no_defs"
-    res <- over(new, moco.grid)
-    x <- as.data.frame(table(res$sector))
+
+    x <- as.data.frame(table(crime()$sector))
     moco.grid@data <- moco.grid@data[ ,1:22]
     moco.grid@data <- data.frame(moco.grid@data, x[match(moco.grid@data[,"sector"], x$Var1),])
     
@@ -166,7 +174,7 @@ shinyServer(function(input, output) {
         addRasterImage(x = loc_density_raster, colors=color_pal, opacity = input$opacity, project = FALSE)
     }else if(input$maptype == 3){
       
-      pal <- colorNumeric(rev(brewer.pal(6, input$polcolor)), domain = mocodat()@data$Freq, na.color = "transparent")
+      pal <- colorNumeric(rev(brewer.pal(6, "RdBu")), domain = mocodat()@data$Freq, na.color = "transparent")
       
       popup <- with(mocodat()@data,paste0("<h4><strong>Sector: ",sector,"</strong></h4>",
                       "<strong>",input$class,": ",Freq,"</strong><br>"))
@@ -175,9 +183,10 @@ shinyServer(function(input, output) {
         addProviderTiles("CartoDB.Positron") %>%
         setView(lng = mean(x[, "longitude"]) - .05, lat = mean(x[, "latitude"]) + .037, zoom = 11) %>%
         addPolygons(data = moco, weight = 2, color = "black", fillOpacity = 0) %>%
-        addPolygons(data = mocodat(), weight = .3 ,color = "gray", popup=popup,
-                    fillColor = ~pal(mocodat()@data$Freq), fillOpacity = input$polopacity) %>%
-        addLegend("bottomright",title=paste0("Total ", input$class), pal = pal, values = mocodat()@data$Freq)
+        addPolygons(data = mocodat(), weight = .3 ,color = "gray", popup=popup,layerId = mocodat()@data$sector,
+                    fillColor = ~pal(mocodat()@data$Freq), fillOpacity = 0.5) %>%
+        addLegend("bottomright",title=paste0("Total ", input$class), pal = pal, 
+                  values = mocodat()@data$Freq,bins=5)
     }
     
 
@@ -365,4 +374,45 @@ shinyServer(function(input, output) {
   observeEvent(input$class, {
     output$heading <- renderText(input$class)
   })
+  
+
+  output$crimefreq <- renderPlot({
+   event <- input$map_shape_click
+    if (is.null(event))
+      return()
+    
+    clickplot <- crime()[crime()$sector == event$id & !is.na(crime()$sector), ]
+    
+    if(nrow(clickplot)==0) return() 
+    
+    clickplot <- data.frame(table(clickplot$newdate))
+    clickplot$Var1 <- as.Date(clickplot$Var1, "%Y-%m-%d")
+    fill <- data.frame(seq(as.Date(input$date[1]), as.Date(input$date[2]), "days"))
+    names(fill) <- "Var1"
+    clickplot <- merge(fill,clickplot, by="Var1",all.x = TRUE)
+    clickplot$Freq[is.na(clickplot$Freq)] <- 0
+    clickplot <- clickplot[1:(nrow(clickplot)-3), ]
+    
+    ggplot(clickplot, aes(x=Var1,y=Freq)) +
+      geom_bar(stat="identity",fill="lightsteelblue3",color='black', size=.2) +
+      geom_smooth(color="indianred3",se=FALSE) +
+      theme(plot.title = element_text(size = ifelse(nchar(input$class)>25,12,
+                                                    ifelse(nchar(input$class)>17,14,18)),
+                                      face="bold", color = "black"),
+            plot.background = element_blank(),
+            panel.border = element_blank(),
+            panel.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            axis.line.y = element_line(color = "black", size=0.75),
+            axis.line.x = element_line(color = "black", size=0.75),
+            axis.text = element_text(size = 12, color="black"),
+            axis.title = element_blank(),
+            axis.ticks = element_line(color="black"),
+            legend.background = element_blank(),
+            legend.key = element_blank(),
+            legend.text = element_text(size = 14, color= "black"),
+            legend.title = element_blank())
+  }, bg="transparent")
+  
 })

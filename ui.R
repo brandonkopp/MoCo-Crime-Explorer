@@ -87,10 +87,11 @@ shinyUI(navbarPage("MoCo Crime Explorer",id="nav",
                                      sliderInput("box","Grid Size (in meters):",min=500,max=3500,step=500,value=1500),
                                      sliderInput("threshold","Threshold:",min=0,max=20,step=2,value=0),
                                      tags$b("____________________________________"),
-                                     h4("Style the Grid Map"),
-                                     selectInput("polcolor", label = "Color Scheme:",
-                                                 choices = c("RdBu","RdGy","RdYlGn","RdYlBu"), selected = "RdBu"),
-                                     sliderInput("polopacity","Opacity:",min=.2,max=1,step=.1,value=.5)
+                                     h4("Crime Frequency"),
+                                     plotOutput("crimefreq",height = 175)
+                                     # selectInput("polcolor", label = "Color Scheme:",
+                                     #             choices = c("RdBu","RdGy","RdYlGn","RdYlBu"), selected = "RdBu"),
+                                     # sliderInput("polopacity","Opacity:",min=.2,max=1,step=.1,value=.5)
                        )
       )
    ),
