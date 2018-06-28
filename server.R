@@ -1,17 +1,7 @@
 shinyServer(function(input, output) {
   
   #Create object to use for map legend
-  maplabels <- c("Homicide","Rape","Robbery","Aggravated Assault","Burglary",
-                 "Larceny","Auto Theft","Assault","Arson","Forgery/Counterfeiting","Bad Checks",
-                 "Embezzlement","Stolen Property","Vandalism","Weapon Possession","Prostitution",
-                 "Sex Offense","Drug Crimes","Gambling","Family Offense","Liquor",
-                 "Disorderly Conduct","Misc. Crime","DUI")
-  cl <- c("01","02","03","04","05",
-          "06","07","08","09","10","11",
-          "12","13","14","15","16",
-          "17","18","19","20","22",
-          "24","27","28")
-  labeldf <- data.frame(maplabels, cl)
+  nibrs <- read.xlsx("nibrs.xlsx",sheetIndex =1)
   
   #Load Outline of Montgomery County
   moco <- readOGR(dsn="./poly", "poly")
@@ -21,51 +11,52 @@ shinyServer(function(input, output) {
   crime <- reactive({
     #Translate text entries in the dropdown menu to strings that can be used to filter dataset
     dataIn <- switch(input$class,
-                     "All Crime" = c("01","02","03","04","05","06","07","08","09","10","11","12","13","14",
-                                     "15","16","17","18","19","20","22","24","27","28"),
-                     "All Crime (except Petty & Financial)" = c("01","02","03","04","05","06","07","08","09","17","28"),
-                     "Part 1 Violent (P1V)" = c("01","02","03","04"),
-                     "Part 1 Property (P1P)" = c("05","06","07","03"),
-                     "Financial Crimes (e.g., Forgery)" = c("10","11","12"),
-                     "Petty Offenses" = c("13","14","15","16","18","19","20","22","24","27"),
-                     "Homicide" = "01",
-                     "Rape" = "02",
-                     "Robbery" = "03",
-                     "Aggravated Assault" = "04",
-                     "Burglary" = "05",
-                     "Larceny" = "06",
-                     "Auto Theft" = "07",
-                     "Arson" = "09",
-                     "Assault" = "08",
-                     "Sex Offense" = "17",
-                     "DUI" = "28") 
+                     "All Crime" = nibrs$cl,
+                     "All Crime (except Petty & Financial)" =  nibrs$cl[nibrs$AllCrimeExcept == 1],
+                     "Violent Crime" =  nibrs$cl[nibrs$Violent == 1],
+                     "Financial Crimes (e.g., Forgery)" =  nibrs$cl[nibrs$Financial == 1],
+                     "Petty Offenses" =  nibrs$cl[nibrs$Petty == 1],
+                     "Homicide" = "09",
+                     "Sex Offenses" = "11",
+                     "Robbery" = "12",
+                     "Assault" = "13",
+                     "Burglary" = "22",
+                     "Larceny" = "23",
+                     "Auto Theft" = "24",
+                     "Arson" = "20",
+                     "DUI" = "90D") 
     
     #Write API Query. For more information see: https://dev.socrata.com/docs/queries/index.html
     #Query selects based on date range set by user and removes several high-frequency, less interesting crime types like minor drug offenses
     #The query was made more specific to limit the total number of records that had to be downloaded in order to get the subset of interest
-    url <- paste0("https://data.montgomerycountymd.gov/resource/crime.json?$where=incident_type!=%272938%27%20AND%20incident_type!=%272942%27%20AND%20incident_type!=%272941%27%20AND%20incident_type!=%271834%27%20AND%20incident_type!=%271031%27%20AND%20start_date%20>%20%27",input$date[1],"%27%20AND%20start_date%20<%20%27",input$date[2],"%27&$limit=50000")
+    url <- paste0("https://data.montgomerycountymd.gov/resource/yc8a-5df8.json?$where=nibrs_code!=%2790Z%27%20AND%20nibrs_code!=%2790I%27%20AND%20nibrs_code!=%27370%27%20AND%20nibrs_code!=%2740A%27%20AND%20nibrs_code!=%2740B%27%20AND%20nibrs_code!=%2736A%27%20AND%20nibrs_code!=%2736B%27%20AND%20start_date%20>%20%27",input$date[1],"%27%20AND%20start_date%20<%20%27",input$date[2],"%27&$limit=50000")
     #Retrieve data
     crime <- fromJSON(url)
     #Remove records that do not have a geotag
+    crime$longitude <- as.numeric(crime$longitude)
+    crime$latitude <- as.numeric(crime$latitude)
     crime <- crime[!is.na(crime$longitude), ]
+    crime <- crime[ ,names(crime) != "geolocation"]
     
     #Crime classifications are hierarchical and many of the specific codes are not useful (e.g., 0522 - BURG NO FORCE - RES/DAY)
     #Create a 2-digit classification at a higher level of aggregation (e.g., 05 - Burglary)
-    crime$cl <- substr(crime$incident_type,1,2)
+    crime$cl <- substr(crime$nibrs_code,1,2)
+    crime$cl[crime$nibrs_code == "90D"] <- "90D"
     
     #Subset the data based on the type of crime selected in the Crime dropdown
     crime <- subset(crime, cl %in% dataIn)
     
     #Merge the labels for the 2-digit crime classifications
-    crime <- join(crime,labeldf, by='cl',type='left',match='all')
+    nibrs$cl <- as.character(nibrs$cl)
+    crime <- left_join(crime,nibrs, by="cl")
     crime$maplabels <- as.factor(crime$maplabels)
-    
-    #Convert latitude and longitude to numeric variables, the preferred for mat for Leaflet
-    crime$longitude <- as.numeric(crime$longitude)
-    crime$latitude <- as.numeric(crime$latitude)
+    if(input$class %in% c("Petty Offenses", "Assault", "Larceny", "Sex Offenses")){
+      crime$cl <- crime$nibrs_code
+      crime$maplabels <- crime$crimename2
+    }
     
     #Convert start_date to variable format recognizable by R
-    crime$start_date <- as.POSIXct(crime$start_date, "%Y-%m-%dT%H:%M:%S", tz="EST")
+    crime$start_date <- as.POSIXct(crime$start_date, "%Y-%m-%dT%H:%M:%S", tz="America/New_York")
     crime$newdate <- as.Date(format(crime$start_date, "%Y-%m-%d"))
     
     #Create variables for use in charts
@@ -130,24 +121,26 @@ shinyServer(function(input, output) {
     projection(loc_density_raster) <- CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
     
     #Create Legend for Crime Points Map
-    legdf <- data.frame(unique(crime()[, "cl"]), unique(crime()[, "maplabels"]))
-    legdf <- arrange(legdf,unique.crime......cl...)
+    if(input$class %in% c("Petty Offenses", "Assault", "Larceny", "Sex Offenses")){
+      legdf <- data.frame(unique(crime()[, c("cl","maplabels")]))
+      legdf <- legdf[complete.cases(legdf), ]
+      legdf <- arrange(legdf,cl)
+    }else{
+      legdf <- data.frame(unique(crime()[, "cl"]), unique(crime()[, "maplabels"]))
+      legdf <- arrange(legdf,unique.crime......cl...)
+    }
+    
+    names(legdf) <- c("cl","maplabels")
     
     #Create popup that appears when a crime location is clicked on
     popup <-  with(crime(),paste(sep = "",
-                                 "<b><h4>",narrative,"</h4></b>",
+                                 "<b><h4>",crimename3,"</h4></b>",
                                  "<b>Address: </b> ",location,"<br/>",
                                  "<b>Date/Time: </b> ",start_date,"<br/>",
                                  "<b>Place: </b> ",place,"<br/>"))
     
     #Set up color scheme for crime points
-    col <- colorFactor(rev(brewer.pal(nrow(legdf), "Paired")), domain= legdf$unique.crime......cl...)
-    
-    #Set up color scheme for heatmap
-    color_pal <- colorNumeric(
-      palette = rev(brewer.pal(9, input$color)), domain = values(loc_density_raster), 
-      na.color = "transparent"
-    )
+    col <- colorFactor(rev(brewer.pal(nrow(legdf), "Paired")), domain= legdf$cl)
     
     #There are two map options; crime points and a heatmap
     if(input$maptype == 1) {
@@ -155,18 +148,24 @@ shinyServer(function(input, output) {
             addProviderTiles("CartoDB.Positron") %>%
             setView(lng = mean(crime()[, "longitude"]) - .05, lat = mean(crime()[, "latitude"]) + .037, zoom = 11) %>%
             addPolygons(data = moco, weight = 2, color = "black", fillOpacity = 0) %>%
-            addCircles(lng = crime()$longitude, lat = crime()$latitude, popup= popup, 
-                       weight = 8, radius=8, color= col(crime()$cl), stroke = TRUE, fillOpacity = .6)
+            addCircleMarkers(lng = crime()$longitude, lat = crime()$latitude, popup= popup, fill=TRUE,
+                       weight = 3, radius=5, color= col(crime()$cl), stroke = TRUE, opacity=0.5)
           
-          if(input$class %in% c("All Crime (except Petty & Financial)","Part 1 Violent (P1V)",
-                                "Part 1 Property (P1P)","Financial Crimes (e.g., Forgery)",
-                                "Petty Offenses")) {
+          if(input$class %in% c("All Crime (except Petty & Financial)","Violent Crime",
+                                "Financial Crimes (e.g., Forgery)",
+                                "Petty Offenses", "Assault", "Larceny", "Sex Offenses")) {
             leaf <- leaf %>%
               addLegend("bottomright", colors= rev(brewer.pal(nrow(legdf), "Paired")), 
-                        labels= legdf$unique.crime......maplabels...,opacity = 0.5)
+                        labels= legdf$maplabels,opacity = 0.5)
           }    
           
     }else if(input$maptype == 2) {
+      #Set up color scheme for heatmap
+      color_pal <- colorNumeric(
+        palette = rev(brewer.pal(9, input$color)), domain = values(loc_density_raster), 
+        na.color = "transparent"
+      )
+      
       leaf <- leaflet() %>%
         addProviderTiles("CartoDB.Positron") %>%
         setView(lng = mean(x[, "longitude"]) - .05, lat = mean(x[, "latitude"]) + .037, zoom = 11) %>%
@@ -187,10 +186,51 @@ shinyServer(function(input, output) {
                     fillColor = ~pal(mocodat()@data$Freq), fillOpacity = 0.5) %>%
         addLegend("bottomright",title=paste0("Total ", input$class), pal = pal, 
                   values = mocodat()@data$Freq,bins=5)
+    }else if(input$maptype == 4) {
+      leaf <- leaflet(crime()) %>%
+        addProviderTiles("CartoDB.DarkMatter") %>%
+        addProviderTiles("Stamen.TonerLines",options = providerTileOptions(opacity = 0.35)) %>%
+        addProviderTiles("Stamen.TonerLabels",options = providerTileOptions(opacity = 0.35)) %>%
+        setView(lng = mean(crime()[, "longitude"]) - .05, lat = mean(crime()[, "latitude"]) + .037, zoom = 11) %>%
+        addPolygons(data = moco, weight = 3, color = "white", fillOpacity = 0) %>%
+        addCircleMarkers(lng = crime()$longitude, lat = crime()$latitude, popup= popup, fill=TRUE,
+                         weight = 4, radius=4, color= col(crime()$cl), stroke = TRUE, fillColor="white",
+                         fillOpacity = 1, opacity=0.6)
+      
+      if(input$class %in% c("All Crime (except Petty & Financial)","Violent Crime",
+                            "Financial Crimes (e.g., Forgery)",
+                            "Petty Offenses", "Assault", "Larceny", "Sex Offenses")) {
+        leaf <- leaf %>%
+          addLegend("bottomright", colors= rev(brewer.pal(nrow(legdf), "Paired")), 
+                    labels= legdf$maplabels,opacity = 0.7)
+      }
     }
     
 
     #Add Layers If Selected
+    if(input$police == TRUE){
+      pstation <- reactive({
+        url <- "https://data.montgomerycountymd.gov/resource/caxq-tx48.json"
+        #Retrieve data
+        stations <- fromJSON(url)
+        stations$longitude <- as.numeric(stations$longitude)
+        stations$latitude <- as.numeric(stations$latitude)
+        return(stations)
+      })
+      
+      popupps <-  with(pstation(),paste(sep = "",
+                                       "<b><h4>",name,"</h4></b>",
+                                       "<b>Address: </b> ",address,"<br/>",
+                                       "<b>Phone: </b> ",phone,"<br/>"))
+      
+      policeIcon <- makeIcon(iconUrl= "http://www.freeiconspng.com/uploads/security-police-icon-24.png",
+                             iconWidth = 50, iconHeight = 50)
+      
+      leaf <- leaf %>%
+        addMarkers(lng = pstation()$longitude, lat = pstation()$latitude, popup= popupps,
+                   icon = policeIcon)
+    }
+    
     if(input$school == TRUE){
       schools <- reactive({
         url <- "https://data.montgomerycountymd.gov/resource/772q-4wm8.json"
@@ -205,8 +245,8 @@ shinyServer(function(input, output) {
                                        "<b><h4>",school_name,"</h4></b>",
                                        "<b>Type: </b> ",category,"<br/>"))
  
-      schoolIcon <- makeIcon(iconUrl= "http://www.clker.com/cliparts/8/3/A/B/B/e/black-mortarboard-md.png",
-                             iconWidth = 20, iconHeight = 12)
+      schoolIcon <- makeIcon(iconUrl= "http://www.freeiconspng.com/uploads/school-lessons-icon-png-47.png",
+                             iconWidth = 20, iconHeight = 20)
       
       leaf <- leaf %>%
         addMarkers(lng = schools()$longitude, lat = schools()$latitude, popup= popupsc,
@@ -289,7 +329,7 @@ shinyServer(function(input, output) {
     popupliquor <-  with(liquor(),paste(sep = "",
                                         "<b><h4>",licensee_name,"</h4></b>",
                                         "<b>Address: </b> ",location_address,"<br/>"))
-    liquorIcon <- makeIcon(iconUrl= "http://www.girlfridayproductions.com/wordpress/wp-content/themes/girlfriday/assets/img/icons/icon-cocktail.png",
+    liquorIcon <- makeIcon(iconUrl= "https://icons8.com/iconizer/files/DOT_pictograms/orig/drink_bar_cocktails.png",
                            iconWidth = 17, iconHeight = 17)
     leaf <- leaf %>%
       addMarkers(lng = liquor()$longitude, lat = liquor()$latitude, popup= popupliquor,

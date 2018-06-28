@@ -3,7 +3,6 @@ require(curl)
 library(dplyr)
 library(leaflet)
 library(RColorBrewer)
-library(plyr)
 library(jsonlite)
 library(ggplot2)
 library(scales)
@@ -12,12 +11,13 @@ library(raster)
 library(sp)
 library(rgdal)
 library(rgeos)
+library(xlsx)
 
 #Create object for "Crime" dropdown menu
-labels <- c("All Crime","All Crime (except Petty & Financial)","Part 1 Violent (P1V)","Part 1 Property (P1P)",
+labels <- c("All Crime","All Crime (except Petty & Financial)","Violent Crime",
             "Financial Crimes (e.g., Forgery)","Petty Offenses","-------- Individual Crimes ---------",
-            "Homicide","Rape","Robbery","Aggravated Assault","Burglary","Larceny","Auto Theft",
-            "Assault","Arson","Sex Offense","DUI")
+            "Homicide","Sex Offenses","Robbery","Assault","Burglary","Larceny","Auto Theft",
+            "Arson", "DUI")
 
 #SHINY UI
 shinyUI(navbarPage("MoCo Crime Explorer",id="nav",
@@ -30,19 +30,19 @@ shinyUI(navbarPage("MoCo Crime Explorer",id="nav",
       #Display Map
       leafletOutput("map", width = "100%", height = "100%"),
       #Banner Across Map With Crime Label
-      tags$div(id="master",
+      tags$div(id="master",style="z-index:500;",
                textOutput("heading")
       ),
       #Left Panel
       absolutePanel(top = 60, left = 50, class = "panel panel-default", 
                     bottom = "auto", height="auto", width=290,fixed = TRUE,
-                    style = "opacity: 0.80;padding: 10px; border-bottom: 1px solid #CCC; background: #e5f2ff;",
+                    style = "z-index:500;opacity: 0.80;padding: 10px; border-bottom: 1px solid #CCC; background: #e5f2ff;",
                     h3(textOutput("txt")),
                     radioButtons("maptype","Map Type:",
-                                 choices = list("Points" = 1, "Heatmap" = 2,"Grid" = 3),selected = 1),
+                                 choices = list("Points" = 1, "Heatmap" = 2,"Grid" = 3,"Firefly"=4),selected = 1),
                     dateRangeInput("date", "Date Range:",
                                    start  = Sys.Date()-30,
-                                   end    = date(),
+                                   end    = Sys.Date(),
                                    min    = "2013-07-01",
                                    max    = date(),
                                    separator = " - "),
@@ -50,15 +50,16 @@ shinyUI(navbarPage("MoCo Crime Explorer",id="nav",
                     tags$b("____________________________________"),tags$br(),
                     h4("Add Layers"),"Works Best With the Heatmap",
                     checkboxInput("school", "Schools"),
+                    checkboxInput("police", "Police Stations"),
                     checkboxInput("hospital","Hospitals"),
                     checkboxInput("liquor","Liquor Stores"),
                     checkboxInput("bar","Bar/Restaurant")
       ),
       #Right Graph Panel
-      conditionalPanel(condition = "input.maptype == '1'",
+      conditionalPanel(condition = "input.maptype == '1' | input.maptype == '4'",
                     absolutePanel(top = 19, right = 10, width=320, class = "panel panel-default", 
                                 bottom = "auto", height="auto", fixed = FALSE, draggable = TRUE,
-                                style = "opacity: 0.80;padding: 2px; border-bottom: 1px solid #CCC; background: #e5f2ff;",
+                                style = "z-index:500;opacity: 0.80;padding: 2px; border-bottom: 1px solid #CCC; background: #e5f2ff;",
                                 plotOutput("dayofweek", height = 200),
                                 plotOutput("hourofday", height = 200, width=320)
                                 )
@@ -67,7 +68,7 @@ shinyUI(navbarPage("MoCo Crime Explorer",id="nav",
       conditionalPanel(condition = "input.maptype == '2'",
                    absolutePanel(top = 19, right = 10, width=275, class = "panel panel-default", 
                                 bottom = "auto", height="auto", fixed = FALSE, draggable = TRUE,
-                                style = "opacity: 0.80;padding: 10px; border-bottom: 1px solid #CCC; background: #e7adb7;",
+                                style = "z-index:500;opacity: 0.80;padding: 10px; border-bottom: 1px solid #CCC; background: #e7adb7;",
                                 h4("Adjust the Heatmap"),
                                 sliderInput("band","Bandwidth:",min=0.002,max=0.020,step = 0.002,value=0.004 ),
                                 sliderInput("thresh","Threshold:",min=5,max=50,step=5,value=30),
@@ -82,7 +83,7 @@ shinyUI(navbarPage("MoCo Crime Explorer",id="nav",
       conditionalPanel(condition = "input.maptype == '3'",
                        absolutePanel(top = 19, right = 10, width=275, class = "panel panel-default", 
                                      bottom = "auto", height="auto", fixed = FALSE, draggable = TRUE,
-                                     style = "opacity: 0.80;padding: 10px; border-bottom: 1px solid #CCC; background: #b8e186;",
+                                     style = "z-index:500;opacity: 0.80;padding: 10px; border-bottom: 1px solid #CCC; background: #b8e186;",
                                      h4("Adjust the Grid Map"),
                                      sliderInput("box","Grid Size (in meters):",min=500,max=3500,step=500,value=1500),
                                      sliderInput("threshold","Threshold:",min=0,max=20,step=2,value=0),
