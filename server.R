@@ -135,21 +135,24 @@ shinyServer(function(input, output) {
     #Create popup that appears when a crime location is clicked on
     popup <-  with(crime(),paste(sep = "",
                                  "<b><h4>",crimename3,"</h4></b>",
-                                 "<b>Address: </b> ",location,"<br/>",
-                                 "<b>Date/Time: </b> ",start_date,"<br/>",
-                                 "<b>Place: </b> ",place,"<br/>"))
+                                 "<table style='width:250px'>",
+                                 "<tr><td><b>Address:</b></td><td>",location,"</td></tr>",
+                                 "<tr><td><b>Date/Time:</b></td><td>",start_date,"</td></tr>",
+                                 "<tr><td><b>Place:</b></td><td>",place,"</td></tr>",
+                                 "</table>"))
     
     #Set up color scheme for crime points
     col <- colorFactor(rev(brewer.pal(nrow(legdf), "Paired")), domain= legdf$cl)
-    
+
     #There are two map options; crime points and a heatmap
     if(input$maptype == 1) {
           leaf <- leaflet(crime()) %>%
             addProviderTiles("CartoDB.Positron") %>%
             setView(lng = mean(crime()[, "longitude"]) - .05, lat = mean(crime()[, "latitude"]) + .037, zoom = 11) %>%
             addPolygons(data = moco, weight = 2, color = "black", fillOpacity = 0) %>%
-            addCircleMarkers(lng = crime()$longitude, lat = crime()$latitude, popup= popup, fill=TRUE,
-                       weight = 3, radius=5, color= col(crime()$cl), stroke = TRUE, opacity=0.5)
+            addCircleMarkers(lng = crime()$longitude, lat = crime()$latitude, popup= popup, 
+                             fillColor = col(crime()$cl), fill=TRUE, fillOpacity=0.6,
+                       weight = 0.5, radius=5, color= "black" , stroke = TRUE)
           
           if(input$class %in% c("All Crime (except Petty & Financial)","Violent Crime",
                                 "Financial Crimes (e.g., Forgery)",
@@ -194,8 +197,8 @@ shinyServer(function(input, output) {
         setView(lng = mean(crime()[, "longitude"]) - .05, lat = mean(crime()[, "latitude"]) + .037, zoom = 11) %>%
         addPolygons(data = moco, weight = 3, color = "white", fillOpacity = 0) %>%
         addCircleMarkers(lng = crime()$longitude, lat = crime()$latitude, popup= popup, fill=TRUE,
-                         weight = 4, radius=4, color= col(crime()$cl), stroke = TRUE, fillColor="white",
-                         fillOpacity = 1, opacity=0.6)
+                         weight = 4, radius=4, color= col(crime()$cl), stroke = TRUE, opacity=0.6,
+                         fillColor="white",fillOpacity = 0.9)
       
       if(input$class %in% c("All Crime (except Petty & Financial)","Violent Crime",
                             "Financial Crimes (e.g., Forgery)",
