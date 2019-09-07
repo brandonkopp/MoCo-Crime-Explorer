@@ -38,6 +38,10 @@ shinyServer(function(input, output) {
     crime <- crime[!is.na(crime$longitude), ]
     crime <- crime[ ,names(crime) != "geolocation"]
     
+    #Remove miscoded geotags (ones that are far outside the county)
+    crime <- crime[(crime$longitude < -76.6) & (crime$longitude > -77.8), ]
+    crime <- crime[(crime$latitude > 38.7) & (crime$latitude < 39.5), ]
+  
     #Crime classifications are hierarchical and many of the specific codes are not useful (e.g., 0522 - BURG NO FORCE - RES/DAY)
     #Create a 2-digit classification at a higher level of aggregation (e.g., 05 - Burglary)
     crime$cl <- substr(crime$nibrs_code,1,2)
@@ -148,7 +152,8 @@ shinyServer(function(input, output) {
     if(input$maptype == 1) {
           leaf <- leaflet(crime()) %>%
             addProviderTiles("CartoDB.Positron") %>%
-            setView(lng = mean(crime()[, "longitude"]) - .05, lat = mean(crime()[, "latitude"]) + .037, zoom = 11) %>%
+            setView(-77.177915, 39.133585, zoom=11) %>% 
+            #setView(lng = mean(crime()[, "longitude"]) - .05, lat = mean(crime()[, "latitude"]) + .037, zoom = 11) %>%
             addPolygons(data = moco, weight = 2, color = "black", fillOpacity = 0) %>%
             addCircleMarkers(lng = crime()$longitude, lat = crime()$latitude, popup= popup, 
                              fillColor = col(crime()$cl), fill=TRUE, fillOpacity=0.6,
@@ -171,7 +176,8 @@ shinyServer(function(input, output) {
       
       leaf <- leaflet() %>%
         addProviderTiles("CartoDB.Positron") %>%
-        setView(lng = mean(x[, "longitude"]) - .05, lat = mean(x[, "latitude"]) + .037, zoom = 11) %>%
+        setView(-77.177915, 39.133585, zoom=11) %>% 
+        #setView(lng = mean(x[, "longitude"]) - .05, lat = mean(x[, "latitude"]) + .037, zoom = 11) %>%
         addPolygons(data = moco, weight = 2, color = "black", fillOpacity = 0) %>%
         addRasterImage(x = loc_density_raster, colors=color_pal, opacity = input$opacity, project = FALSE)
     }else if(input$maptype == 3){
@@ -183,7 +189,8 @@ shinyServer(function(input, output) {
       
       leaf <- leaflet(mocodat()) %>%
         addProviderTiles("CartoDB.Positron") %>%
-        setView(lng = mean(x[, "longitude"]) - .05, lat = mean(x[, "latitude"]) + .037, zoom = 11) %>%
+        setView(-77.177915, 39.133585, zoom=11) %>% 
+        #setView(lng = mean(x[, "longitude"]) - .05, lat = mean(x[, "latitude"]) + .037, zoom = 11) %>%
         addPolygons(data = moco, weight = 2, color = "black", fillOpacity = 0) %>%
         addPolygons(data = mocodat(), weight = .3 ,color = "gray", popup=popup,layerId = mocodat()@data$sector,
                     fillColor = ~pal(mocodat()@data$Freq), fillOpacity = 0.5) %>%
@@ -194,7 +201,8 @@ shinyServer(function(input, output) {
         addProviderTiles("CartoDB.DarkMatter") %>%
         addProviderTiles("Stamen.TonerLines",options = providerTileOptions(opacity = 0.35)) %>%
         addProviderTiles("Stamen.TonerLabels",options = providerTileOptions(opacity = 0.35)) %>%
-        setView(lng = mean(crime()[, "longitude"]) - .05, lat = mean(crime()[, "latitude"]) + .037, zoom = 11) %>%
+        setView(-77.177915, 39.133585, zoom=11) %>% 
+        #setView(lng = mean(crime()[, "longitude"]) - .05, lat = mean(crime()[, "latitude"]) + .037, zoom = 11) %>%
         addPolygons(data = moco, weight = 3, color = "white", fillOpacity = 0) %>%
         addCircleMarkers(lng = crime()$longitude, lat = crime()$latitude, popup= popup, fill=TRUE,
                          weight = 4, radius=4, color= col(crime()$cl), stroke = TRUE, opacity=0.6,
